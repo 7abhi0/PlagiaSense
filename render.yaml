@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: plagiasense-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:5000 app:app
+    envVars:
+      - key: MONGO_URI
+        fromSecret: MONGO_URI
+      - key: JWT_SECRET_KEY
+        fromSecret: JWT_SECRET_KEY
+      - key: UPLOAD_FOLDER
+        value: /tmp/uploads
+      - key: REFERENCE_CORPUS
+        value: /app/datasets/reference_corpus.txt
+      - key: MODEL_PATH
+        value: /app/models/model.pkl
+      - key: RATE_LIMIT_IP
+        value: "100 per hour"
+      - key: RATE_LIMIT_USER
+        value: "200 per day"
+      - key: CORS_ORIGINS
+        value: "*"

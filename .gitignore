@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Build artifacts
+frontend/dist/
+frontend/.vite/
+backend/__pycache__/
+
+# OS files
+.DS_Store
+Thumbs.db
