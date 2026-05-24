@@ -1,1 +1,14 @@
-FROM python:3.11-slim\n\n# Set working directory\nWORKDIR /app\n\n# Install system dependencies (if any)\nRUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev && rm -rf /var/lib/apt/lists/*\n\n# Copy only requirements first to leverage caching\nCOPY backend/requirements.txt ./\n\n# Install Python dependencies\nRUN pip install --no-cache-dir -r requirements.txt\n\n# Copy the rest of the application code\nCOPY backend/ .\n\n# Set environment variables\nENV FLASK_APP=app.py\nENV FLASK_RUN_HOST=0.0.0.0\n\n# Expose port (default Flask port)\nEXPOSE 5000\n\n# Use gunicorn for production server\nCMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY backend/requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY backend/ .
+
+EXPOSE 5000
+
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+
