@@ -62,24 +62,13 @@ Use these to log in.
 
 ## Deployment
 ### Frontend (Vercel)
-1. Connect the `frontend/` folder to Vercel.
-2. Vercel will use `frontend/vercel.json` for SPA routing.
-3. In your Vercel project **Settings → Environment Variables**, add:
-   - `VITE_API_URL` = `https://<YOUR_RENDER_BACKEND_DOMAIN>/api`
-     - Example: `https://plagiasense-backend.onrender.com/api`
-4. Redeploy the frontend.
+- Connect the `frontend/` folder to Vercel.
+- Vercel will use the `vercel.json` config for SPA routing.
 
 ### Backend (Render)
-1. Create a new **Web Service** on Render.
-2. Set:
-   - Build command: `pip install -r requirements.txt`
-   - Start command: `gunicorn --bind 0.0.0.0:5000 app:app`
-3. Add environment variables:
-   - `MONGO_URI`
-   - `JWT_SECRET_KEY`
-   - `MODEL_PATH`
-   - (optional but commonly required) `CORS_ORIGINS`, `UPLOAD_FOLDER`, `REFERENCE_CORPUS`
-4. Redeploy the backend.
+- Create a new **Web Service** on Render.
+- Set the build command to `pip install -r requirements.txt` and the start command to `gunicorn -w 4 -b 0.0.0.0:10000 run:app`.
+- Add the environment variables (`MONGO_URI`, `JWT_SECRET`, `MODEL_PATH`).
 
 ## API Documentation
 See the **API_DOCS.md** file in the `backend/` folder for detailed request/response examples.
