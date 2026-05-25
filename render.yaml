@@ -14,6 +14,8 @@ services:
         fromSecret: MONGO_URI
       - key: JWT_SECRET
         fromSecret: JWT_SECRET
+      - key: FIREBASE_PROJECT_ID
+        value: plagiasense
       - key: UPLOAD_FOLDER
         value: /tmp/uploads
       - key: RATE_LIMIT_IP

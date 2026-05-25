@@ -9,6 +9,7 @@ class Config:
     JWT_SECRET_KEY = os.getenv('JWT_SECRET', 'jwt-secret-key')
     MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/plagiasense')
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*')
+    FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID')
     # Rate limiting defaults are set in extensions.py
     # Model path for AI detection
     MODEL_PATH = os.getenv('MODEL_PATH', os.path.join(os.path.dirname(__file__), '..', 'models', 'model.pkl'))
