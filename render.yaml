@@ -2,6 +2,7 @@ services:
   - type: web
     name: plagiasense-backend
     env: python
+    rootDir: backend
     pythonVersion: 3.11.9
 
     plan: free
@@ -10,14 +11,10 @@ services:
     envVars:
       - key: MONGO_URI
         fromSecret: MONGO_URI
-      - key: JWT_SECRET_KEY
-        fromSecret: JWT_SECRET_KEY
+      - key: JWT_SECRET
+        fromSecret: JWT_SECRET
       - key: UPLOAD_FOLDER
         value: /tmp/uploads
-      - key: REFERENCE_CORPUS
-        value: /app/datasets/reference_corpus.txt
-      - key: MODEL_PATH
-        value: /app/models/model.pkl
       - key: RATE_LIMIT_IP
         value: "100 per hour"
       - key: RATE_LIMIT_USER
