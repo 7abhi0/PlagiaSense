@@ -8,7 +8,10 @@ from pymongo import MongoClient
 # Global extension instances (initialized later via init_extensions)
 cors = CORS()
 jwt = JWTManager()
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
+)
 db = None  # MongoDB database reference, set in init_extensions
 
 

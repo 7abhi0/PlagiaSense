@@ -1,14 +1,16 @@
+import os
 import numpy as np
 
-# Try to load SentenceTransformer, fall back to TF-IDF Sentence Encoder if PyTorch DLL errors occur
 _model = None
-use_fallback = False
+SentenceTransformer = None
+use_fallback = os.getenv("USE_SENTENCE_TRANSFORMERS", "false").lower() not in {"1", "true", "yes"}
 
-try:
-    from sentence_transformers import SentenceTransformer
-except (ImportError, OSError) as e:
-    print(f"Warning: SentenceTransformers failed to import ({e}). Switching to robust TF-IDF sentence encoder fallback.")
-    use_fallback = True
+if not use_fallback:
+    try:
+        from sentence_transformers import SentenceTransformer
+    except (ImportError, OSError) as e:
+        print(f"SentenceTransformers unavailable ({e}); using TF-IDF sentence encoder fallback.")
+        use_fallback = True
 
 # Fallback Encoder using TF-IDF for sentence-level semantic representations
 class TFIDF_SentenceEncoderFallback:
