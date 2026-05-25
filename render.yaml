@@ -1,14 +1,15 @@
 services:
   - type: web
     name: plagiasense-backend
-    env: python
+    runtime: python
     rootDir: backend
-    pythonVersion: 3.11.9
 
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:5000 app:app
+    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: MONGO_URI
         fromSecret: MONGO_URI
       - key: JWT_SECRET
