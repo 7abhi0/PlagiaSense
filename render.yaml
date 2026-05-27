@@ -3,6 +3,7 @@ services:
     name: plagiasense-backend
     runtime: python
     rootDir: backend
+    healthCheckPath: /health
 
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -10,12 +11,14 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
-      - key: MONGO_URI
-        fromSecret: MONGO_URI
       - key: JWT_SECRET
         fromSecret: JWT_SECRET
       - key: FIREBASE_PROJECT_ID
         value: plagiasense
+      - key: FIREBASE_STORAGE_BUCKET
+        value: plagiasense.firebasestorage.app
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        fromSecret: FIREBASE_SERVICE_ACCOUNT_JSON
       - key: UPLOAD_FOLDER
         value: /tmp/uploads
       - key: RATE_LIMIT_IP

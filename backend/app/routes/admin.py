@@ -1,12 +1,11 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from bson import ObjectId
 from app.extensions import db
 
 admin_bp = Blueprint('admin', __name__)
 
 def is_admin(user_id):
-    user = db.users.find_one({'_id': ObjectId(user_id)})
+    user = db.users.find_one({'_id': user_id})
     return user and user.get('role') == 'admin'
 
 @admin_bp.route('/users', methods=['GET'])
@@ -24,7 +23,7 @@ def get_users():
 def delete_user(user_id):
     if not is_admin(get_jwt_identity()):
         return jsonify({'error': 'Admin only'}), 403
-    db.users.delete_one({'_id': ObjectId(user_id)})
+    db.users.delete_one({'_id': user_id})
     return jsonify({'msg': 'Deleted'})
 
 @admin_bp.route('/stats', methods=['GET'])

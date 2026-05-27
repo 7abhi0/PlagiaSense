@@ -7,6 +7,10 @@ from .middleware import register_error_handlers
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    @app.route("/", methods=["GET"])
+    def health_root():
+        return {"status": "ok", "message": "PlagiaSense API is running"}, 200
     
     upload_folder = app.config.get('UPLOAD_FOLDER', os.path.join(os.path.dirname(__file__), '..', 'uploads'))
     os.makedirs(upload_folder, exist_ok=True)

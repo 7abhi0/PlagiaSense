@@ -10,6 +10,30 @@ import api from '../utils/api';
 
 const AuthContext = createContext();
 
+const getAuthErrorMessage = (error) => {
+  if (error?.message === 'Network Error' || error?.code === 'ERR_NETWORK') {
+    return 'Could not reach the backend API. Check VITE_API_URL or make sure the backend server is running.';
+  }
+
+  if (error?.code === 'auth/operation-not-allowed') {
+    return 'Email/password sign-in is disabled in Firebase. Enable it in Firebase Console > Authentication > Sign-in method.';
+  }
+
+  if (error?.code === 'auth/user-not-found' || error?.code === 'auth/invalid-credential') {
+    return 'Invalid email or password.';
+  }
+
+  if (error?.code === 'auth/email-already-in-use') {
+    return 'An account already exists with this email.';
+  }
+
+  if (error?.code === 'auth/weak-password') {
+    return 'Password should be at least 6 characters.';
+  }
+
+  return error.response?.data?.msg || error.message || 'Authentication failed';
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -25,22 +49,30 @@ export const AuthProvider = ({ children }) => {
   }, [token]);
 
   const login = async (email, password) => {
-    const credential = await signInWithEmailAndPassword(firebaseAuth, email, password);
-    const idToken = await credential.user.getIdToken();
-    const res = await api.post('/auth/firebase', { id_token: idToken });
-    setToken(res.data.access_token);
-    setUser({ email: res.data.email, name: res.data.name, role: res.data.role });
+    try {
+      const credential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+      const idToken = await credential.user.getIdToken();
+      const res = await api.post('/auth/firebase', { id_token: idToken });
+      setToken(res.data.access_token);
+      setUser({ email: res.data.email, name: res.data.name, role: res.data.role });
+    } catch (error) {
+      throw new Error(getAuthErrorMessage(error));
+    }
   };
 
   const register = async (email, password, name) => {
-    const credential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
-    if (name) {
-      await updateProfile(credential.user, { displayName: name });
+    try {
+      const credential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+      if (name) {
+        await updateProfile(credential.user, { displayName: name });
+      }
+      const idToken = await credential.user.getIdToken(true);
+      const res = await api.post('/auth/firebase', { id_token: idToken, name });
+      setToken(res.data.access_token);
+      setUser({ email: res.data.email, name: res.data.name, role: res.data.role });
+    } catch (error) {
+      throw new Error(getAuthErrorMessage(error));
     }
-    const idToken = await credential.user.getIdToken(true);
-    const res = await api.post('/auth/firebase', { id_token: idToken, name });
-    setToken(res.data.access_token);
-    setUser({ email: res.data.email, name: res.data.name, role: res.data.role });
   };
 
   const logout = () => {

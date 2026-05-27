@@ -98,10 +98,9 @@ def firebase_login():
 @auth_bp.route('/me', methods=['GET'])
 def me():
     from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
-    from bson import ObjectId
     verify_jwt_in_request()
     user_id = get_jwt_identity()
-    user = db.users.find_one({'_id': ObjectId(user_id)}, {'password': 0})
+    user = db.users.find_one({'_id': user_id}, {'password': 0})
     if not user:
         return jsonify({'msg': 'User not found'}), 404
     user['_id'] = str(user['_id'])

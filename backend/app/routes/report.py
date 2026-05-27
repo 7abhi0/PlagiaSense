@@ -1,6 +1,5 @@
 from flask import Blueprint, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from bson import ObjectId
 from app.extensions import db
 import io
 from reportlab.pdfgen import canvas
@@ -11,7 +10,7 @@ report_bp = Blueprint('report', __name__)
 @jwt_required()
 def get_user_reports():
     user_id = get_jwt_identity()
-    scans = list(db.scans.find({'user_id': ObjectId(user_id)}).sort('created_at', -1))
+    scans = list(db.scans.find({'user_id': user_id}).sort('created_at', -1))
     for s in scans:
         s['_id'] = str(s['_id'])
         s['user_id'] = str(s['user_id'])
@@ -23,9 +22,9 @@ def get_user_reports():
 @jwt_required()
 def get_user_stats():
     user_id = get_jwt_identity()
-    total_scans = db.scans.count_documents({'user_id': ObjectId(user_id)})
+    total_scans = db.scans.count_documents({'user_id': user_id})
     pipeline = [
-        {"$match": {"user_id": ObjectId(user_id)}},
+        {"$match": {"user_id": user_id}},
         {"$group": {"_id": None, "avg_plag": {"$avg": "$plagiarism_score"}, "avg_ai": {"$avg": "$ai_confidence"}}}
     ]
     res = list(db.scans.aggregate(pipeline))
@@ -40,7 +39,7 @@ def get_user_stats():
 @report_bp.route('/<scan_id>', methods=['GET'])
 @jwt_required()
 def get_report(scan_id):
-    scan = db.scans.find_one({'_id': ObjectId(scan_id)})
+    scan = db.scans.find_one({'_id': scan_id})
     if not scan:
         return jsonify({'error': 'Scan not found'}), 404
     scan['_id'] = str(scan['_id'])
@@ -52,7 +51,7 @@ def get_report(scan_id):
 @report_bp.route('/<scan_id>/pdf', methods=['GET'])
 @jwt_required()
 def get_pdf(scan_id):
-    scan = db.scans.find_one({'_id': ObjectId(scan_id)})
+    scan = db.scans.find_one({'_id': scan_id})
     if not scan:
         return jsonify({'error': 'Scan not found'}), 404
         

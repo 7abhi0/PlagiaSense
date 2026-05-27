@@ -1,9 +1,9 @@
 import os
 import uuid
+from datetime import datetime, timezone
 import numpy as np
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from bson import ObjectId
 from app.extensions import db
 from app.utils.file_handler import extract_text
 from app.ml.semantic_search import perform_semantic_plagiarism_scan
@@ -87,10 +87,10 @@ def detect():
     stylometry_metrics = extract_stylometric_features(text)
     perplexity_metrics = analyze_perplexity_and_burstiness(text)
     
-    # Save scan to MongoDB
+    # Save scan to Firestore
     try:
         scan_doc = {
-            'user_id': ObjectId(user_id),
+            'user_id': user_id,
             'text_excerpt': text[:500] + ('...' if len(text) > 500 else ''),
             'plagiarism_score': float(plag_results['plagiarism_score']),
             'matches': plag_results['matches'],
@@ -100,7 +100,8 @@ def detect():
             'ai_heatmap': ai_heatmap,
             'stylometry': stylometry_metrics,
             'perplexity': perplexity_metrics,
-            'created_at': __import__('datetime').datetime.utcnow()
+            # Firestore stores naive/aware datetimes; ensure tz-aware for consistent sorting.
+            'created_at': datetime.now(timezone.utc)
         }
 
         result = db.scans.insert_one(scan_doc)
