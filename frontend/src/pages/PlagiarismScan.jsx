@@ -21,7 +21,7 @@ export default function PlagiarismScan() {
       } else {
         formData.append('text', text);
       }
-      const res = await api.post('/scan/detect', formData);
+const res = await api.post('/api/scan/detect', formData);
       setResult(res.data);
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || 'Plagiarism scan failed.';

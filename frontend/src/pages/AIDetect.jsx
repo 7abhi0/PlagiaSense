@@ -11,7 +11,7 @@ export default function AIDetect() {
     setLoading(true);
     setResult(null);
     try {
-      const res = await api.post('/scan/detect', { text });
+const res = await api.post('/api/scan/detect', { text });
       setResult(res.data);
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || 'AI content classification failed.';
