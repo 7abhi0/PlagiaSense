@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -12,10 +13,16 @@ DESCENDING = -1
 
 
 def initialize_firestore(app):
-    service_account_json = app.config.get("FIREBASE_SERVICE_ACCOUNT_JSON")
-    project_id = app.config.get("FIREBASE_PROJECT_ID")
-    storage_bucket = app.config.get("FIREBASE_STORAGE_BUCKET")
-    app_name = app.config.get("FIREBASE_APP_NAME", "plagiasense-backend")
+    """
+    Initialize Firestore client using either:
+    - FIREBASE_SERVICE_ACCOUNT_JSON (preferred, JSON string)
+    - fallback to ApplicationDefault (for local dev / Workload Identity)
+    """
+    # Prefer env vars (works in Render where config may not propagate as expected)
+    service_account_json = json.loads(os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "null")) if os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON") else None
+    project_id = os.environ.get("FIREBASE_PROJECT_ID") or app.config.get("FIREBASE_PROJECT_ID")
+    storage_bucket = os.environ.get("FIREBASE_STORAGE_BUCKET") or app.config.get("FIREBASE_STORAGE_BUCKET")
+    app_name = os.environ.get("FIREBASE_APP_NAME", "plagiasense-backend") or app.config.get("FIREBASE_APP_NAME", "plagiasense-backend")
 
     options = {}
     if project_id:
@@ -28,10 +35,11 @@ def initialize_firestore(app):
     except ValueError:
         credential = None
         if service_account_json:
-            try:
-                credential = credentials.Certificate(json.loads(service_account_json))
-            except json.JSONDecodeError as exc:
-                raise ValueError("FIREBASE_SERVICE_ACCOUNT_JSON must be valid JSON") from exc
+            # service_account_json is already parsed JSON dict here
+            credential = credentials.Certificate(service_account_json)
+        else:
+            # fallback for local/dev (uses local default credentials)
+            credential = None
 
         firebase_app = initialize_app(
             credential=credential,
