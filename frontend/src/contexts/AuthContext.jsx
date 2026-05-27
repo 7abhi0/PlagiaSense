@@ -41,7 +41,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (token) {
       localStorage.setItem('token', token);
-      api.get('/auth/me').then(res => setUser(res.data)).catch(() => logout());
+      api.get('/api/auth/me').then(res => setUser(res.data)).catch(() => logout());
     } else {
       localStorage.removeItem('token');
       setUser(null);
@@ -52,7 +52,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const credential = await signInWithEmailAndPassword(firebaseAuth, email, password);
       const idToken = await credential.user.getIdToken();
-      const res = await api.post('/auth/firebase', { id_token: idToken });
+      const res = await api.post('/api/auth/firebase', { id_token: idToken });
       setToken(res.data.access_token);
       setUser({ email: res.data.email, name: res.data.name, role: res.data.role });
     } catch (error) {
@@ -67,7 +67,7 @@ export const AuthProvider = ({ children }) => {
         await updateProfile(credential.user, { displayName: name });
       }
       const idToken = await credential.user.getIdToken(true);
-      const res = await api.post('/auth/firebase', { id_token: idToken, name });
+      const res = await api.post('/api/auth/firebase', { id_token: idToken, name });
       setToken(res.data.access_token);
       setUser({ email: res.data.email, name: res.data.name, role: res.data.role });
     } catch (error) {
