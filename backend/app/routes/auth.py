@@ -49,8 +49,12 @@ def login():
     }), 200
 
 
-@auth_bp.route('/firebase', methods=['POST'])
+@auth_bp.route('/firebase', methods=['POST', 'OPTIONS'])
 def firebase_login():
+    # Ensure CORS preflight doesn't 404 when calling this endpoint
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
     data = request.get_json() or {}
     id_token = data.get('id_token', '')
     requested_name = data.get('name', '')
