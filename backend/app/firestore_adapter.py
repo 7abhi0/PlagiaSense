@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from firebase_admin import credentials, firestore, get_app, initialize_app
+import firebase_admin
 
 ASCENDING = 1
 DESCENDING = -1
@@ -17,9 +18,17 @@ def initialize_firestore(app):
     Initialize Firestore client using either:
     - FIREBASE_SERVICE_ACCOUNT_JSON (preferred, JSON string)
     - fallback to ApplicationDefault (for local dev / Workload Identity)
+
+    IMPORTANT:
+    Also ensure the Firebase *default* app is initialized. Some parts of the code
+    (e.g. firebase_admin.auth) use the default app implicitly.
     """
     # Prefer env vars (works in Render where config may not propagate as expected)
-    service_account_json = json.loads(os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "null")) if os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON") else None
+    service_account_json = (
+        json.loads(os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "null"))
+        if os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
+        else None
+    )
     project_id = os.environ.get("FIREBASE_PROJECT_ID") or app.config.get("FIREBASE_PROJECT_ID")
     storage_bucket = os.environ.get("FIREBASE_STORAGE_BUCKET") or app.config.get("FIREBASE_STORAGE_BUCKET")
     app_name = os.environ.get("FIREBASE_APP_NAME", "plagiasense-backend") or app.config.get("FIREBASE_APP_NAME", "plagiasense-backend")
@@ -30,17 +39,26 @@ def initialize_firestore(app):
     if storage_bucket:
         options["storageBucket"] = storage_bucket
 
+    # Prepare credential for initialization calls (named + default)
+    credential = None
+    if service_account_json:
+        # service_account_json is already parsed JSON dict here
+        credential = credentials.Certificate(service_account_json)
+
+    # 1) Ensure DEFAULT app exists (firebase_admin.auth relies on it)
+    try:
+        firebase_admin.get_app()  # default app
+    except ValueError:
+        # Only initialize if we have enough info; otherwise let firebase_admin/auth fail clearly.
+        firebase_admin.initialize_app(
+            credential=credential,
+            options=options or None,
+        )
+
+    # 2) Ensure a named app exists for Firestore client usage
     try:
         firebase_app = get_app(app_name)
     except ValueError:
-        credential = None
-        if service_account_json:
-            # service_account_json is already parsed JSON dict here
-            credential = credentials.Certificate(service_account_json)
-        else:
-            # fallback for local/dev (uses local default credentials)
-            credential = None
-
         firebase_app = initialize_app(
             credential=credential,
             options=options or None,
