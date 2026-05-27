@@ -50,57 +50,77 @@ def make_json_safe(obj):
 def detect():
     user_id = get_jwt_identity()
     text = ""
-    
-    # Handle file uploads or plain text JSON
-    if 'file' in request.files:
-        file = request.files['file']
-        if file.filename != '':
-            filename = str(uuid.uuid4()) + "_" + file.filename
-            filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-            try:
-                text = extract_text(filepath)
-            except Exception as e:
-                return jsonify({'error': str(e)}), 400
-            finally:
-                if os.path.exists(filepath):
-                    os.remove(filepath)
-    else:
-        # Support both JSON ({ "text": "..." }) and multipart/form-data ({ text: "..." })
-        data = request.get_json(silent=True) or {}
-        text = data.get('text', '') or request.form.get('text', '') or ''
-        
-    if not text.strip():
-        return jsonify({'error': 'No text provided'}), 400
-        
-    # 1. Perform Web-Scale Semantic Plagiarism Scan
-    plag_results = perform_semantic_plagiarism_scan(text)
-    
-    # 2. Advanced Ensemble AI Classifier
-    model_path = current_app.config['MODEL_PATH']
-    is_ai, ai_confidence = predict_ai_generated(text, model_path)
-    
-    # 3. AI Likelihood Heatmap
-    ai_heatmap = get_sentence_heatmap(text, model_path)
-    
-    # 4. Stylometric & Perplexity Metrics
-    stylometry_metrics = extract_stylometric_features(text)
-    perplexity_metrics = analyze_perplexity_and_burstiness(text)
-    
-    # Save scan to Firestore
+    filepath = None
+
     try:
+        # Handle file uploads or plain text JSON
+        if 'file' in request.files:
+            file = request.files['file']
+            if file and file.filename != '':
+                filename = str(uuid.uuid4()) + "_" + file.filename
+                filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                try:
+                    text = extract_text(filepath)
+                except Exception as e:
+                    current_app.logger.exception("File parse/extract failed")
+                    return jsonify({'error': 'file parse error', 'details': str(e)}), 400
+                finally:
+                    if filepath and os.path.exists(filepath):
+                        os.remove(filepath)
+        else:
+            # Support both JSON ({ "text": "..." }) and multipart/form-data ({ text: "..." })
+            data = request.get_json(silent=True) or {}
+            text = data.get('text', '') or request.form.get('text', '') or ''
+
+        if not text or not text.strip():
+            return jsonify({'error': 'No text provided'}), 400
+
+        # 1. Perform Web-Scale Semantic Plagiarism Scan
+        try:
+            plag_results = perform_semantic_plagiarism_scan(text)
+        except TimeoutError as e:
+            current_app.logger.exception("Plagiarism scan timeout")
+            return jsonify({'error': 'API timeout', 'details': str(e)}), 504
+        except Exception as e:
+            current_app.logger.exception("Plagiarism scan failed")
+            return jsonify({'error': 'internal error', 'details': str(e)}), 500
+
+        # 2. Advanced Ensemble AI Classifier
+        model_path = current_app.config['MODEL_PATH']
+        try:
+            is_ai, ai_confidence = predict_ai_generated(text, model_path)
+        except Exception as e:
+            current_app.logger.exception("AI classifier failed")
+            return jsonify({'error': 'internal error', 'details': str(e)}), 500
+
+        # 3. AI Likelihood Heatmap
+        try:
+            ai_heatmap = get_sentence_heatmap(text, model_path)
+        except Exception as e:
+            current_app.logger.exception("AI heatmap generation failed")
+            return jsonify({'error': 'internal error', 'details': str(e)}), 500
+
+        # 4. Stylometric & Perplexity Metrics
+        try:
+            stylometry_metrics = extract_stylometric_features(text)
+            perplexity_metrics = analyze_perplexity_and_burstiness(text)
+        except Exception as e:
+            current_app.logger.exception("Stylometry/perplexity analysis failed")
+            return jsonify({'error': 'internal error', 'details': str(e)}), 500
+
+        # Save scan to Firestore
         scan_doc = {
             'user_id': user_id,
             'text_excerpt': text[:500] + ('...' if len(text) > 500 else ''),
-            'plagiarism_score': float(plag_results['plagiarism_score']),
-            'matches': plag_results['matches'],
-            'highlighted_sentences': plag_results['highlighted_sentences'],
+            'plagiarism_score': float(plag_results.get('plagiarism_score', 0)),
+            'matches': plag_results.get('matches', []),
+            'highlighted_sentences': plag_results.get('highlighted_sentences', []),
             'ai_generated': bool(is_ai),
             'ai_confidence': float(ai_confidence),
             'ai_heatmap': ai_heatmap,
             'stylometry': stylometry_metrics,
             'perplexity': perplexity_metrics,
-            # Firestore stores naive/aware datetimes; ensure tz-aware for consistent sorting.
             'created_at': datetime.now(timezone.utc)
         }
 
@@ -119,5 +139,8 @@ def detect():
             'perplexity': scan_doc['perplexity']
         }
         return jsonify(make_json_safe(response_data))
+
     except Exception as e:
-        return jsonify({'error': 'Scan save/response failed', 'details': str(e)}), 500
+        current_app.logger.exception("Unhandled scan detect error")
+        return jsonify({'error': 'internal error', 'details': str(e)}), 500
+

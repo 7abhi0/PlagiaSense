@@ -14,7 +14,8 @@ export default function AIDetect() {
       const res = await api.post('/scan/detect', { text });
       setResult(res.data);
     } catch (err) {
-      alert('AI content classification failed.');
+      const msg = err?.response?.data?.error || err?.message || 'AI content classification failed.';
+      window.dispatchEvent(new CustomEvent('plagiasense:toast', { detail: { type: 'error', message: msg } }));
     } finally {
       setLoading(false);
     }

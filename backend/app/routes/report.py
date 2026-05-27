@@ -28,13 +28,14 @@ def get_user_stats():
         {"$group": {"_id": None, "avg_plag": {"$avg": "$plagiarism_score"}, "avg_ai": {"$avg": "$ai_confidence"}}}
     ]
     res = list(db.scans.aggregate(pipeline))
-    avg_plag = res[0]['avg_plag'] if res else 0
-    avg_ai = res[0]['avg_ai'] if res else 0
+    avg_plag = res[0].get('avg_plag', 0) if res else 0
+    avg_ai = res[0].get('avg_ai', 0) if res else 0
     return jsonify({
         'total_scans': total_scans,
         'avg_plagiarism': round(avg_plag, 2),
         'avg_ai_confidence': round(avg_ai, 2)
     })
+
 
 @report_bp.route('/<scan_id>', methods=['GET'])
 @jwt_required()

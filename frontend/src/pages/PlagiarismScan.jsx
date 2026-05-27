@@ -24,7 +24,8 @@ export default function PlagiarismScan() {
       const res = await api.post('/scan/detect', formData);
       setResult(res.data);
     } catch (err) {
-      alert('Plagiarism scan failed.');
+      const msg = err?.response?.data?.error || err?.message || 'Plagiarism scan failed.';
+      window.dispatchEvent(new CustomEvent('plagiasense:toast', { detail: { type: 'error', message: msg } }));
     } finally {
       setLoading(false);
     }
@@ -43,7 +44,7 @@ export default function PlagiarismScan() {
       link.download = `report_${scanId}.pdf`;
       link.click();
     } catch (err) {
-      alert('Failed to download PDF report.');
+      window.dispatchEvent(new CustomEvent('plagiasense:toast', { detail: { type: 'error', message: 'Failed to download PDF report.' } }));
     } finally {
       setPdfLoading(false);
     }

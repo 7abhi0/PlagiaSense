@@ -41,7 +41,7 @@ export default function Dashboard() {
       link.download = `report_${scanId}.pdf`;
       link.click();
     } catch (err) {
-      alert('Failed to download PDF report.');
+      window.dispatchEvent(new CustomEvent('plagiasense:toast', { detail: { type: 'error', message: 'Failed to download PDF report.' } }));
     } finally {
       setPdfLoading(prev => ({ ...prev, [scanId]: false }));
     }
