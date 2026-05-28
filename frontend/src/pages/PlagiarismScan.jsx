@@ -4,6 +4,8 @@ import api from '../utils/api';
 export default function PlagiarismScan() {
   const [text, setText] = useState('');
   const [file, setFile] = useState(null);
+  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [selectedMatch, setSelectedMatch] = useState(null);
@@ -86,11 +88,16 @@ const res = await api.post('/api/scan/detect', formData);
               className="w-full h-80 p-4 bg-slate-900 rounded-xl border border-slate-700 focus:border-indigo-500 outline-none resize-none mb-4 text-slate-100 transition focus:ring-2 focus:ring-indigo-500/20"
               disabled={loading}
             ></textarea>
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-xs text-slate-400">Supports PDF, DOCX, PPTX, TXT</p>
+              <p className="text-xs text-slate-400">Words: {wordCount}</p>
+            </div>
+            <div className="mt-2" />
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-4 w-full sm:w-auto">
                 <input 
                   type="file" 
-                  accept=".txt,.pdf,.docx"
+                  accept=".txt,.pdf,.docx,.pptx,.ppt"
                   onChange={e => {
                     setFile(e.target.files[0]);
                     if (e.target.files[0]) setText(''); // Clear text if user uploads file
@@ -110,6 +117,12 @@ const res = await api.post('/api/scan/detect', formData);
 
           {result && (
             <div className="glass-card p-6 rounded-2xl border border-slate-700 bg-slate-800/80 space-y-6 animate-[fadeIn_0.5s_ease-out]">
+              {result.truncated && (
+                <div className="warning-banner bg-yellow-900/30 border border-yellow-500/30 text-yellow-200 px-4 py-3 rounded-xl">
+                  ⚠️ Document was truncated to 50,000 characters for scanning. For full accuracy, split your document into smaller sections.
+                </div>
+              )}
+
               <div className="flex border-b border-slate-700">
                 <button 
                   onClick={() => setActiveTab('highlighted')} 
@@ -157,8 +170,9 @@ const res = await api.post('/api/scan/detect', formData);
                         <p className="text-slate-300 text-sm">"{match.original_text}"</p>
                         <div className="flex items-center justify-between text-xs text-slate-500 mt-2">
                           <a href={match.source_url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline truncate max-w-xs sm:max-w-md">
-                            Source: {match.source_url}
+                            {match.title || match.source_url}
                           </a>
+                          <span className="block text-xs text-slate-500">Source: {match.source_url}</span>
                         </div>
                       </div>
                     ))
@@ -200,6 +214,12 @@ const res = await api.post('/api/scan/detect', formData);
                   </span>
                 </div>
               </div>
+
+              {result.chunks_scanned > 1 && (
+                <p className="text-sm text-slate-400">
+                  Scanned in {result.chunks_scanned} sections
+                </p>
+              )}
 
               <div className="border-t border-slate-700 pt-4">
                 <button

@@ -54,9 +54,20 @@ def detect():
 
     try:
         # Handle file uploads or plain text JSON
+        truncated = False
+        MAX_CHARS = 50000  # ~8000 words
+        word_count = 0
+
         if 'file' in request.files:
             file = request.files['file']
             if file and file.filename != '':
+                # Reject files > 10MB
+                file.seek(0, os.SEEK_END)
+                size = file.tell()
+                file.seek(0)
+                if size > 10 * 1024 * 1024:
+                    return jsonify({'error': 'File too large. Max 10MB allowed.'}), 413
+
                 filename = str(uuid.uuid4()) + "_" + file.filename
                 filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
                 file.save(filepath)
@@ -75,6 +86,14 @@ def detect():
 
         if not text or not text.strip():
             return jsonify({'error': 'No text provided'}), 400
+
+        # Truncate extremely large inputs for token safety.
+        if len(text) > MAX_CHARS:
+            text = text[:MAX_CHARS]
+            truncated = True
+
+        word_count = len(text.split())
+
 
         # 1. Perform Web-Scale Semantic Plagiarism Scan
         try:
@@ -136,8 +155,12 @@ def detect():
             'ai_confidence': scan_doc['ai_confidence'],
             'ai_heatmap': scan_doc['ai_heatmap'],
             'stylometry': scan_doc['stylometry'],
-            'perplexity': scan_doc['perplexity']
+            'perplexity': scan_doc['perplexity'],
+            'truncated': truncated,
+            'word_count': word_count,
+            'chunks_scanned': plag_results.get('chunks_scanned', 1)
         }
+
         return jsonify(make_json_safe(response_data))
 
     except Exception as e:

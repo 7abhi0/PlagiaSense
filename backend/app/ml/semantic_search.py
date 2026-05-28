@@ -27,109 +27,215 @@ def split_into_sentences(text: str) -> list:
             
     return unmasked_sentences
 
-def perform_semantic_plagiarism_scan(text: str, google_key: str = None) -> dict:
-    """
-    Perform a web-scale semantic plagiarism scan by checking sentences
-    against the web and comparing sentence embeddings.
-    """
-    input_sentences = split_into_sentences(text)
+def chunk_text(text, chunk_size: int = 400, overlap: int = 80) -> list:
+    """Split text into overlapping chunks by word count."""
+    # Normalize whitespace
+    text = (text or "").replace("\n", " ")
+    # Sentence-ish split. (We keep your original approach.)
+    sentences = text.split(". ")
+
+    chunks = []
+    current_chunk = []
+    current_len = 0
+
+    def chunk_len(words_list):
+        return sum(len(s.split()) for s in words_list)
+
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+
+        words = sentence.split()
+        if current_len + len(words) > chunk_size:
+            if current_chunk:
+                chunks.append(". ".join(current_chunk).strip() + ".")
+
+            # Keep last overlap words for context continuity
+            overlap_sentences = []
+            overlap_len = 0
+            for s in reversed(current_chunk):
+                overlap_len += len(s.split())
+                if overlap_len >= overlap:
+                    break
+                overlap_sentences.insert(0, s)
+
+            current_chunk = overlap_sentences
+            current_len = chunk_len(current_chunk)
+
+        current_chunk.append(sentence)
+        current_len += len(words)
+
+    if current_chunk:
+        chunks.append(". ".join(current_chunk).strip())
+
+    return [c for c in chunks if len(c.strip()) > 50]
+
+
+def _scan_chunk_semantic(chunk: str) -> dict:
+    """Existing sentence semantic scan logic (for a chunk)."""
+    input_sentences = split_into_sentences(chunk)
     if not input_sentences:
         return {
             "plagiarism_score": 0.0,
             "matches": [],
-            "highlighted_sentences": []
+            "highlighted_sentences": [],
         }
-        
-    # Generate search queries for the longest 3 sentences (most likely to contain copy-paste footprints)
+
+    # Generate search queries for the longest 3 sentences
     sorted_sentences = sorted(input_sentences, key=lambda s: len(s), reverse=True)
     search_queries = [s for s in sorted_sentences[:3] if len(s) > 30]
-    
-    # Retrieve web candidates (dict: url -> cleaned text)
+
     web_candidates = get_web_candidates(search_queries, max_pages=3)
-    
-    # If no web candidates found, return 0% plagiarism
+
     if not web_candidates:
         return {
             "plagiarism_score": 0.0,
             "matches": [],
-            "highlighted_sentences": [{"text": s, "similarity": 0.0, "category": "unique"} for s in input_sentences]
+            "highlighted_sentences": [
+                {"text": s, "similarity": 0.0, "category": "unique"}
+                for s in input_sentences
+            ],
         }
-        
-    # Extract all sentences from scraped pages
+
     all_scraped_sentences = []
-    sentence_sources = [] # list of (url, sentence)
-    
+    sentence_sources = []  # (url, sentence)
+
     for url, body_text in web_candidates.items():
         scraped_sents = split_into_sentences(body_text)
         for s in scraped_sents:
             if len(s.strip()) > 15:
                 all_scraped_sentences.append(s)
                 sentence_sources.append((url, s))
-                
+
     if not all_scraped_sentences:
         return {
             "plagiarism_score": 0.0,
             "matches": [],
-            "highlighted_sentences": [{"text": s, "similarity": 0.0, "category": "unique"} for s in input_sentences]
+            "highlighted_sentences": [
+                {"text": s, "similarity": 0.0, "category": "unique"}
+                for s in input_sentences
+            ],
         }
-        
-    # Calculate embeddings
+
     input_embeddings = embedding_cache.get_embeddings(input_sentences)
     scraped_embeddings = embedding_cache.get_embeddings(all_scraped_sentences)
-    
-    # Compute similarity matrix (len(input) x len(scraped))
+
     sim_matrix = cosine_similarity(input_embeddings, scraped_embeddings)
-    
+
     matches = []
     highlighted_sentences = []
-    plagiarized_count = 0
+
     total_len = sum(len(s) for s in input_sentences)
     weighted_plagiarism_sum = 0.0
-    
+
     for idx, sentence in enumerate(input_sentences):
-        # Find the best match for this sentence in all scraped content
         max_idx = np.argmax(sim_matrix[idx])
         max_score = float(sim_matrix[idx][max_idx])
-        
+
         category = "unique"
         if max_score >= 0.90:
             category = "exact"
-            plagiarized_count += 1
             weighted_plagiarism_sum += len(sentence)
         elif max_score >= 0.70:
             category = "paraphrased"
-            plagiarized_count += 1
             weighted_plagiarism_sum += len(sentence) * 0.7
         elif max_score >= 0.55:
             category = "weak_paraphrased"
             weighted_plagiarism_sum += len(sentence) * 0.4
-            
+
         url, matched_text = sentence_sources[max_idx]
-        
+
         if category != "unique":
-            matches.append({
-                "original_text": sentence,
-                "matched_text": matched_text,
-                "similarity_score": round(max_score * 100, 2),
-                "source_url": url,
-                "category": category
-            })
-            
-        highlighted_sentences.append({
-            "text": sentence,
-            "similarity": round(max_score * 100, 2),
-            "category": category,
-            "source_url": url if category != "unique" else None,
-            "matched_text": matched_text if category != "unique" else None
-        })
-        
-    # Calculate overall score weighted by sentence lengths
-    plagiarism_score = round((weighted_plagiarism_sum / total_len) * 100, 2) if total_len > 0 else 0.0
-    # Bound to 100% max
+            matches.append(
+                {
+                    "original_text": sentence,
+                    "matched_text": matched_text,
+                    "similarity_score": round(max_score * 100, 2),
+                    "source_url": url,
+                    "category": category,
+                }
+            )
+
+        highlighted_sentences.append(
+            {
+                "text": sentence,
+                "similarity": round(max_score * 100, 2),
+                "category": category,
+                "source_url": url if category != "unique" else None,
+                "matched_text": matched_text if category != "unique" else None,
+            }
+        )
+
+    plagiarism_score = (
+        round((weighted_plagiarism_sum / total_len) * 100, 2) if total_len > 0 else 0.0
+    )
     plagiarism_score = min(plagiarism_score, 100.0)
-    
+
     return {
         "plagiarism_score": plagiarism_score,
         "matches": matches,
-        "highlighted_sentences": highlighted_sentences
+        "highlighted_sentences": highlighted_sentences,
     }
+
+
+def perform_semantic_plagiarism_scan(text: str, google_key: str = None) -> dict:
+    """Web-scale semantic plagiarism scan with intelligent chunking."""
+    chunks = chunk_text(text)
+    if not chunks:
+        input_sentences = split_into_sentences(text)
+        return {
+            "plagiarism_score": 0.0,
+            "matches": [],
+            "highlighted_sentences": [
+                {"text": s, "similarity": 0.0, "category": "unique"}
+                for s in input_sentences
+            ],
+            "chunks_scanned": 0,
+            "chunks_with_matches": 0,
+        }
+
+    all_matches = []
+    all_highlighted = []
+    chunk_scores = []
+
+    for i, chunk in enumerate(chunks):
+        try:
+            result = _scan_chunk_semantic(chunk)
+            chunk_scores.append(float(result.get("plagiarism_score", 0.0) or 0.0))
+
+            # Deduplicate matches by URL
+            for match in result.get("matches", []):
+                if not any(m.get("source_url") == match.get("source_url") for m in all_matches):
+                    all_matches.append(match)
+
+            all_highlighted.extend(result.get("highlighted_sentences", []))
+        except Exception as e:
+            print(f"Chunk {i} scan failed: {e}")
+            continue
+
+    # Weighted score: use 90th percentile not max to avoid outliers
+    if chunk_scores:
+        sorted_scores = sorted(chunk_scores, reverse=True)
+        top_scores = sorted_scores[: max(1, len(sorted_scores) // 5)]
+        final_score = sum(top_scores) / len(top_scores)
+    else:
+        final_score = 0.0
+
+    # Deduplicate highlighted sentences
+    seen = set()
+    unique_highlighted = []
+    for s in all_highlighted:
+        key = (s.get("text") or "")[:80]
+        if key and key not in seen:
+            seen.add(key)
+            unique_highlighted.append(s)
+
+    return {
+        "plagiarism_score": round(float(final_score), 4),
+        "matches": all_matches[:20],
+        "highlighted_sentences": unique_highlighted,
+        "chunks_scanned": len(chunks),
+        "chunks_with_matches": sum(1 for s in chunk_scores if s > 0.1),
+    }
+
