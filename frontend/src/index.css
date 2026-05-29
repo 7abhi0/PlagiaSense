@@ -2,47 +2,124 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 body {
   margin: 0;
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: #0d1117;
 }
 
+/* Glass Card */
 .glass-card {
-  background: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background: rgba(22, 27, 39, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease, transform 0.25s ease;
+}
+
+.glass-card:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(124, 111, 237, 0.15);
 }
 
 /* Custom Scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
+::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.35); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.6); }
 
-::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.3);
-  border-radius: 9999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.6);
-}
-
-/* Keyframes for page transition animations */
+/* Animations */
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124, 111, 237, 0.4); }
+  50%       { box-shadow: 0 0 0 8px rgba(124, 111, 237, 0); }
+}
+
+/* Gradient text shimmer for loading states */
+.shimmer-text {
+  background: linear-gradient(90deg, #4f4f7a 25%, #8b87c1 50%, #4f4f7a 75%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 1.5s linear infinite;
+}
+
+/* Smooth table row hover */
+tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+/* Button active press */
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Focus rings */
+textarea:focus, input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+
+/* Sidebar active link glow */
+.sidebar-active {
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+  box-shadow: inset 3px 0 0 #6366f1;
+}
+
+/* Metric bar fill animation */
+.metric-fill {
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Toast notification slide-in */
+.toast-enter {
+  animation: slideInRight 0.3s ease-out forwards;
+}
+
+/* Responsive table */
+@media (max-width: 640px) {
+  .hide-mobile { display: none !important; }
+}
+
+/* Card hover lift */
+.card-hover {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(124, 111, 237, 0.2);
+}
+
+/* Score ring transition */
+circle {
+  transition: stroke-dashoffset 1.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Highlighted sentence hover */
+.sentence-highlight {
+  transition: background-color 0.15s ease;
 }
