@@ -1,13 +1,37 @@
-# PlagiaSense Fix TODO
+# PlagiaSense Stability Refactor — Checklist
 
-- [x] TASK 1: Rewrite `backend/app/utils/file_handler.py` to support PDF, DOCX, PPTX/PPT, TXT, DOC fallback.
-- [x] TASK 5a: Update `backend/requirements.txt` to include python-pptx==0.6.23 (and ensure existing pinned libs remain).
-- [x] TASK 2: Add chunking + weighted scoring + match/highlight dedup + chunk stats in `backend/app/ml/semantic_search.py`.
+## Step 1: Web scraping hardening
+- [ ] Update `backend/app/utils/web_scraper.py`
+  - [ ] Skip unsupported URLs/domains: youtube.com, facebook.com, instagram.com, plus PDF links
+  - [ ] Add strict scraping budgets (max pages, max candidates, max total scraped chars)
+  - [ ] Enforce per-request timeout protection (connect/read via requests)
+  - [ ] Add retry-safe scraping (2 retries with exponential backoff)
+  - [ ] Reduce extracted text size per page (lower cap)
 
-- [x] TASK 3: Add 10MB file size limit, 50k char truncation warning, and response fields in `backend/app/routes/scan.py`.
-- [x] TASK 4: Update `frontend/src/pages/PlagiarismScan.jsx` UI (supported types, word count, chunks scanned, truncation banner, show match cards with URLs).
+## Step 2: Semantic pipeline memory + performance caps
+- [ ] Update `backend/app/ml/semantic_search.py`
+  - [ ] Limit chunks count and/or chunk size
+  - [ ] Cap max input sentences / scraped sentences per chunk
+  - [ ] Prevent cosine similarity matrix blowups by bounding scraped sentences
+  - [ ] Add wall-clock budget for whole web candidate fetching + per chunk best-effort
+  - [ ] Ensure consistent return schema on failures/timeouts
 
+## Step 3: API stability + clean JSON errors + deadline
+- [ ] Update `backend/app/routes/scan.py`
+  - [ ] Add request-level deadline checks (wall clock) around the entire pipeline
+  - [ ] Return clean JSON errors with consistent shape
+  - [ ] Ensure no internal exception leaks stack traces/details
 
-- [ ] After changes: run a local sanity test by tracing a ~5000-word input through chunking logic.
-- [ ] Git: `git add -A`, `git commit -m "Fix long document and PPT plagiarism scanning"`, `git push`.
-- [ ] Provide full contents of every changed file.
+## Step 4: Gunicorn + Render free-tier crash reduction
+- [ ] Update `backend/start.sh`
+  - [ ] Set gunicorn workers/threads/max-requests/timeout for low RAM stability
+- [ ] Update `render.yaml`
+  - [ ] Add env vars for scraping/text/scan caps where applicable
+
+## Step 5: Logging improvements
+- [ ] Add structured logs in scraper + scan route for timings and skip reasons
+
+## Step 6: Quick validation
+- [ ] Run a smoke test locally (single small request) and confirm JSON response shape
+- [ ] Ensure skipped URLs/pdfs are not scraped
+- [ ] Confirm no crashes on large inputs (text truncation + caps respected)

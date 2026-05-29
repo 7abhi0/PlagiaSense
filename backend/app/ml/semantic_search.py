@@ -1,6 +1,9 @@
 import re
+import time
+
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+
 from app.ml.embeddings import embedding_cache
 from app.utils.web_scraper import get_web_candidates
 
@@ -72,8 +75,21 @@ def chunk_text(text, chunk_size: int = 400, overlap: int = 80) -> list:
     return [c for c in chunks if len(c.strip()) > 50]
 
 
-def _scan_chunk_semantic(chunk: str) -> dict:
-    """Existing sentence semantic scan logic (for a chunk)."""
+def _scan_chunk_semantic(
+    chunk: str,
+    *,
+    max_input_sentences: int = 45,
+    max_search_queries: int = 3,
+    max_pages: int = 3,
+    max_scraped_sentences: int = 220,
+) -> dict:
+    """
+    Web-scale semantic scan logic for a chunk with hard memory/time caps.
+
+    Key stability changes:
+    - cap number of input sentences used for embedding/similarity
+    - cap number of scraped sentences used for cosine similarity
+    """
     input_sentences = split_into_sentences(chunk)
     if not input_sentences:
         return {
@@ -82,11 +98,33 @@ def _scan_chunk_semantic(chunk: str) -> dict:
             "highlighted_sentences": [],
         }
 
-    # Generate search queries for the longest 3 sentences
-    sorted_sentences = sorted(input_sentences, key=lambda s: len(s), reverse=True)
-    search_queries = [s for s in sorted_sentences[:3] if len(s) > 30]
+    # Hard cap to control cosine similarity matrix size
+    if len(input_sentences) > max_input_sentences:
+        input_sentences = sorted(input_sentences, key=lambda s: len(s), reverse=True)[
+            :max_input_sentences
+        ]
 
-    web_candidates = get_web_candidates(search_queries, max_pages=3)
+    # Generate search queries for the longest N sentences
+    sorted_sentences = sorted(input_sentences, key=lambda s: len(s), reverse=True)
+    search_queries = [s for s in sorted_sentences[:max_search_queries] if len(s) > 30]
+
+    if not search_queries:
+        return {
+            "plagiarism_score": 0.0,
+            "matches": [],
+            "highlighted_sentences": [
+                {"text": s, "similarity": 0.0, "category": "unique"}
+                for s in input_sentences
+            ],
+        }
+
+    web_candidates = get_web_candidates(
+        search_queries,
+        max_pages=max_pages,
+        max_candidates_total=max_pages,
+        max_total_chars=12_000,
+        per_page_max_chars=1800,
+    )
 
     if not web_candidates:
         return {
@@ -102,11 +140,17 @@ def _scan_chunk_semantic(chunk: str) -> dict:
     sentence_sources = []  # (url, sentence)
 
     for url, body_text in web_candidates.items():
+        if not body_text:
+            continue
         scraped_sents = split_into_sentences(body_text)
         for s in scraped_sents:
             if len(s.strip()) > 15:
                 all_scraped_sentences.append(s)
                 sentence_sources.append((url, s))
+            if len(all_scraped_sentences) >= max_scraped_sentences:
+                break
+        if len(all_scraped_sentences) >= max_scraped_sentences:
+            break
 
     if not all_scraped_sentences:
         return {
@@ -118,20 +162,23 @@ def _scan_chunk_semantic(chunk: str) -> dict:
             ],
         }
 
+    # Embed fewer sentences to reduce RAM/CPU
     input_embeddings = embedding_cache.get_embeddings(input_sentences)
     scraped_embeddings = embedding_cache.get_embeddings(all_scraped_sentences)
 
+    # Similarity matrix size is bounded by max_input_sentences * max_scraped_sentences
     sim_matrix = cosine_similarity(input_embeddings, scraped_embeddings)
 
     matches = []
     highlighted_sentences = []
 
-    total_len = sum(len(s) for s in input_sentences)
+    total_len = sum(len(s) for s in input_sentences) or 1
     weighted_plagiarism_sum = 0.0
 
     for idx, sentence in enumerate(input_sentences):
-        max_idx = np.argmax(sim_matrix[idx])
-        max_score = float(sim_matrix[idx][max_idx])
+        row = sim_matrix[idx]
+        max_idx = int(np.argmax(row))
+        max_score = float(row[max_idx])
 
         category = "unique"
         if max_score >= 0.90:
@@ -167,9 +214,7 @@ def _scan_chunk_semantic(chunk: str) -> dict:
             }
         )
 
-    plagiarism_score = (
-        round((weighted_plagiarism_sum / total_len) * 100, 2) if total_len > 0 else 0.0
-    )
+    plagiarism_score = round((weighted_plagiarism_sum / total_len) * 100, 2)
     plagiarism_score = min(plagiarism_score, 100.0)
 
     return {
@@ -179,8 +224,22 @@ def _scan_chunk_semantic(chunk: str) -> dict:
     }
 
 
-def perform_semantic_plagiarism_scan(text: str, google_key: str = None) -> dict:
-    """Web-scale semantic plagiarism scan with intelligent chunking."""
+def perform_semantic_plagiarism_scan(
+    text: str,
+    google_key: str = None,
+) -> dict:
+    """
+    Web-scale semantic plagiarism scan with stability caps.
+
+    This function is designed to be safe for low RAM:
+    - hard cap chunk count
+    - enforce a wall-clock budget for scanning
+    - bounded similarity matrix sizes via _scan_chunk_semantic caps
+    """
+    # Wall-clock budget per request for the entire web scan stage
+    # (classifier + stylometry are handled elsewhere)
+    scan_deadline_seconds = float(os.getenv("WEB_SCAN_DEADLINE_SECONDS", "12"))
+
     chunks = chunk_text(text)
     if not chunks:
         input_sentences = split_into_sentences(text)
@@ -195,26 +254,42 @@ def perform_semantic_plagiarism_scan(text: str, google_key: str = None) -> dict:
             "chunks_with_matches": 0,
         }
 
+    # Cap number of chunks to reduce embedding/similarity workload
+    max_chunks = int(os.getenv("MAX_WEB_SCAN_CHUNKS", "6"))
+    chunks = chunks[:max_chunks]
+
     all_matches = []
     all_highlighted = []
     chunk_scores = []
 
+    scan_start = time.time()
+
     for i, chunk in enumerate(chunks):
+        if (time.time() - scan_start) > scan_deadline_seconds:
+            break
         try:
-            result = _scan_chunk_semantic(chunk)
+            result = _scan_chunk_semantic(
+                chunk,
+                max_input_sentences=45,
+                max_search_queries=3,
+                max_pages=3,
+                max_scraped_sentences=int(os.getenv("MAX_SCRAPED_SENTENCES", "220")),
+            )
             chunk_scores.append(float(result.get("plagiarism_score", 0.0) or 0.0))
 
-            # Deduplicate matches by URL
+            # Deduplicate matches by URL (light dedupe)
             for match in result.get("matches", []):
-                if not any(m.get("source_url") == match.get("source_url") for m in all_matches):
+                if not any(
+                    m.get("source_url") == match.get("source_url") for m in all_matches
+                ):
                     all_matches.append(match)
 
             all_highlighted.extend(result.get("highlighted_sentences", []))
-        except Exception as e:
-            print(f"Chunk {i} scan failed: {e}")
+        except Exception:
+            # Best-effort: do not crash worker
             continue
 
-    # Weighted score: use 90th percentile not max to avoid outliers
+    # Weighted score: use top decile-ish not max to avoid outliers
     if chunk_scores:
         sorted_scores = sorted(chunk_scores, reverse=True)
         top_scores = sorted_scores[: max(1, len(sorted_scores) // 5)]
